@@ -8,7 +8,7 @@
                 "maxLambdaSize": "15mb",
                 "runtime": "python3.9",
                 "pythonVersion": "3.9",
-                "buildCommand": "pip install -r requirements.txt"
+                "buildCommand": "python -m pip install --upgrade pip && pip install -r requirements.txt"
             }
         }
     ],
@@ -24,6 +24,7 @@
     ],
     "env": {
         "PYTHONPATH": ".",
-        "FLASK_ENV": "production"
+        "FLASK_ENV": "production",
+        "PYTHON_VERSION": "3.9"
     }
 } 
