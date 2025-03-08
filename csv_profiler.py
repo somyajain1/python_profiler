@@ -258,7 +258,7 @@ class CSVProfiler:
             print(f"Error analyzing file: {str(e)}")
             return False
 
-    def generate_report(self, output_dir: str = "output") -> str:
+    def generate_report(self, output_dir: str = "/tmp/output") -> str:
         """Generate PDF report with the analysis results."""
         if not self.stats:
             if not self.analyze():
@@ -273,115 +273,133 @@ class CSVProfiler:
         project_dir = os.path.join(output_dir, clean_filename)
         os.makedirs(project_dir, exist_ok=True)
         
-        # Initialize PDF
-        pdf = FPDF()
-        pdf.set_margins(10, 10, 10)  # Set left, top, right margins
-        pdf.add_page()
+        # Create a temporary directory for plots
+        import tempfile
+        temp_dir = tempfile.mkdtemp(prefix='csv_profiler_')
         
-        # Title
-        pdf.set_font('Arial', 'B', 16)
-        pdf.cell(0, 10, 'CSV Profile Report', ln=True, align='C')
-        pdf.ln(10)
-        
-        # AI Insights Section
-        pdf.set_font('Arial', 'B', 14)
-        pdf.cell(0, 10, 'AI-Driven Insights', ln=True)
-        pdf.set_font('Arial', '', 10)
-        
-        # Key Findings
-        pdf.ln(5)
-        pdf.set_font('Arial', 'B', 12)
-        pdf.cell(0, 8, 'Key Findings:', ln=True)
-        pdf.set_font('Arial', '', 10)
-        for finding in self.insights['key_findings']:
-            pdf.set_x(15)  # Indent the findings
-            pdf.multi_cell(180, 8, f"- {finding}")
-        
-        # Correlation Heatmap
-        if self.insights['correlations'] and 'heatmap_path' in self.insights['correlations']:
+        try:
+            # Initialize PDF
+            pdf = FPDF()
+            pdf.set_margins(10, 10, 10)  # Set left, top, right margins
             pdf.add_page()
-            pdf.set_font('Arial', 'B', 12)
-            pdf.cell(0, 10, 'Correlation Analysis:', ln=True)
-            pdf.image(self.insights['correlations']['heatmap_path'], x=10, y=None, w=190)
-            os.remove(self.insights['correlations']['heatmap_path'])
-        
-        # File Statistics
-        pdf.add_page()
-        pdf.set_font('Arial', 'B', 14)
-        pdf.cell(0, 10, 'File Overview', ln=True)
-        pdf.set_font('Arial', '', 10)
-        
-        file_stats = self.stats['file_stats']
-        for key, value in file_stats.items():
-            pdf.cell(0, 8, f"{key.replace('_', ' ').title()}: {value}", ln=True)
-        
-        # Column Analysis
-        pdf.add_page()
-        pdf.set_font('Arial', 'B', 14)
-        pdf.cell(0, 10, 'Column Analysis', ln=True)
-        
-        for column, stats in self.stats['column_stats'].items():
-            pdf.add_page()
-            pdf.set_font('Arial', 'B', 12)
-            pdf.cell(0, 10, f"Column: {column}", ln=True)
             
-            # Add primary key indicator
-            if column in self.insights['primary_keys']:
-                pdf.set_font('Arial', 'B', 10)
-                pdf.set_text_color(0, 128, 0)  # Green color
-                pdf.cell(0, 8, "Potential Primary Key", ln=True)
-                pdf.set_text_color(0, 0, 0)  # Reset to black
+            # Title
+            pdf.set_font('Arial', 'B', 16)
+            pdf.cell(0, 10, 'CSV Profile Report', ln=True, align='C')
+            pdf.ln(10)
             
+            # AI Insights Section
+            pdf.set_font('Arial', 'B', 14)
+            pdf.cell(0, 10, 'AI-Driven Insights', ln=True)
             pdf.set_font('Arial', '', 10)
-            # Basic stats
-            pdf.cell(0, 8, f"Type: {stats['type']}", ln=True)
-            pdf.cell(0, 8, f"Missing Values: {stats['missing']}", ln=True)
-            pdf.cell(0, 8, f"Unique Values: {stats['unique']}", ln=True)
             
-            # Numeric stats
-            if 'mean' in stats:
-                pdf.cell(0, 8, f"Mean: {stats['mean']:.2f}", ln=True)
-                pdf.cell(0, 8, f"Standard Deviation: {stats['std']:.2f}", ln=True)
-                pdf.cell(0, 8, f"Min: {stats['min']}", ln=True)
-                pdf.cell(0, 8, f"Max: {stats['max']}", ln=True)
-                pdf.cell(0, 8, f"25th Percentile: {stats['25%']:.2f}", ln=True)
-                pdf.cell(0, 8, f"Median: {stats['50%']:.2f}", ln=True)
-                pdf.cell(0, 8, f"75th Percentile: {stats['75%']:.2f}", ln=True)
+            # Key Findings
+            pdf.ln(5)
+            pdf.set_font('Arial', 'B', 12)
+            pdf.cell(0, 8, 'Key Findings:', ln=True)
+            pdf.set_font('Arial', '', 10)
+            for finding in self.insights['key_findings']:
+                pdf.set_x(15)  # Indent the findings
+                pdf.multi_cell(180, 8, f"- {finding}")
+            
+            # Correlation Heatmap
+            if self.insights['correlations'] and 'heatmap_path' in self.insights['correlations']:
+                heatmap_path = os.path.join(temp_dir, 'correlation_heatmap.png')
+                plt.figure(figsize=(10, 8))
+                sns.heatmap(self.df[self.df.select_dtypes(include=[np.number]).columns].corr(), 
+                           annot=True, cmap='coolwarm', center=0)
+                plt.title('Correlation Heatmap')
+                plt.tight_layout()
+                plt.savefig(heatmap_path)
+                plt.close()
                 
-                # Add trend information if available
-                if column in self.insights['trends']:
-                    trend_info = self.insights['trends'][column]
+                pdf.add_page()
+                pdf.set_font('Arial', 'B', 12)
+                pdf.cell(0, 10, 'Correlation Analysis:', ln=True)
+                pdf.image(heatmap_path, x=10, y=None, w=190)
+            
+            # File Statistics
+            pdf.add_page()
+            pdf.set_font('Arial', 'B', 14)
+            pdf.cell(0, 10, 'File Overview', ln=True)
+            pdf.set_font('Arial', '', 10)
+            
+            file_stats = self.stats['file_stats']
+            for key, value in file_stats.items():
+                pdf.cell(0, 8, f"{key.replace('_', ' ').title()}: {value}", ln=True)
+            
+            # Column Analysis
+            pdf.add_page()
+            pdf.set_font('Arial', 'B', 14)
+            pdf.cell(0, 10, 'Column Analysis', ln=True)
+            
+            for column, stats in self.stats['column_stats'].items():
+                pdf.add_page()
+                pdf.set_font('Arial', 'B', 12)
+                pdf.cell(0, 10, f"Column: {column}", ln=True)
+                
+                # Add primary key indicator
+                if column in self.insights['primary_keys']:
+                    pdf.set_font('Arial', 'B', 10)
+                    pdf.set_text_color(0, 128, 0)  # Green color
+                    pdf.cell(0, 8, "Potential Primary Key", ln=True)
+                    pdf.set_text_color(0, 0, 0)  # Reset to black
+                
+                pdf.set_font('Arial', '', 10)
+                # Basic stats
+                pdf.cell(0, 8, f"Type: {stats['type']}", ln=True)
+                pdf.cell(0, 8, f"Missing Values: {stats['missing']}", ln=True)
+                pdf.cell(0, 8, f"Unique Values: {stats['unique']}", ln=True)
+                
+                # Numeric stats
+                if 'mean' in stats:
+                    pdf.cell(0, 8, f"Mean: {stats['mean']:.2f}", ln=True)
+                    pdf.cell(0, 8, f"Standard Deviation: {stats['std']:.2f}", ln=True)
+                    pdf.cell(0, 8, f"Min: {stats['min']}", ln=True)
+                    pdf.cell(0, 8, f"Max: {stats['max']}", ln=True)
+                    pdf.cell(0, 8, f"25th Percentile: {stats['25%']:.2f}", ln=True)
+                    pdf.cell(0, 8, f"Median: {stats['50%']:.2f}", ln=True)
+                    pdf.cell(0, 8, f"75th Percentile: {stats['75%']:.2f}", ln=True)
+                    
+                    # Add trend information if available
+                    if column in self.insights['trends']:
+                        trend_info = self.insights['trends'][column]
+                        pdf.ln(5)
+                        pdf.set_font('Arial', 'B', 10)
+                        pdf.cell(0, 8, "Trend Analysis:", ln=True)
+                        pdf.set_font('Arial', '', 10)
+                        pdf.cell(0, 8, f"Trend: {trend_info['trend'].title()}", ln=True)
+                        pdf.cell(0, 8, f"Distribution: {trend_info['distribution'].title()}", ln=True)
+                
+                # Categorical stats
+                if 'top_values' in stats:
                     pdf.ln(5)
                     pdf.set_font('Arial', 'B', 10)
-                    pdf.cell(0, 8, "Trend Analysis:", ln=True)
+                    pdf.cell(0, 8, "Top Values:", ln=True)
                     pdf.set_font('Arial', '', 10)
-                    pdf.cell(0, 8, f"Trend: {trend_info['trend'].title()}", ln=True)
-                    pdf.cell(0, 8, f"Distribution: {trend_info['distribution'].title()}", ln=True)
+                    for val, count in stats['top_values'].items():
+                        pdf.cell(0, 8, f"{val}: {count}", ln=True)
+                
+                # Add plot if available
+                if 'plot' in stats:
+                    # Save plots in the project directory
+                    plot_path = os.path.join(project_dir, f'plot_{column}.png')
+                    os.rename(stats['plot'], plot_path)
+                    pdf.image(plot_path, x=10, y=None, w=190)
+                    os.remove(plot_path)  # Clean up
             
-            # Categorical stats
-            if 'top_values' in stats:
-                pdf.ln(5)
-                pdf.set_font('Arial', 'B', 10)
-                pdf.cell(0, 8, "Top Values:", ln=True)
-                pdf.set_font('Arial', '', 10)
-                for val, count in stats['top_values'].items():
-                    pdf.cell(0, 8, f"{val}: {count}", ln=True)
+            # Save the report with a clean name
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+            report_name = f"{clean_filename}_profile_report_{timestamp}.pdf"
+            output_file = os.path.join(project_dir, report_name)
+            pdf.output(output_file)
             
-            # Add plot if available
-            if 'plot' in stats:
-                # Save plots in the project directory
-                plot_path = os.path.join(project_dir, f'plot_{column}.png')
-                os.rename(stats['plot'], plot_path)
-                pdf.image(plot_path, x=10, y=None, w=190)
-                os.remove(plot_path)  # Clean up
-        
-        # Save the report with a clean name
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M")
-        report_name = f"{clean_filename}_profile_report_{timestamp}.pdf"
-        output_file = os.path.join(project_dir, report_name)
-        pdf.output(output_file)
-        
-        return output_file
+            return output_file
+            
+        finally:
+            # Clean up temporary files
+            import shutil
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
 if __name__ == "__main__":
     import sys

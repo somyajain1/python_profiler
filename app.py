@@ -7,13 +7,14 @@ import pandas as pd
 app = Flask(__name__)
 
 # Configure upload settings
-UPLOAD_FOLDER = 'input'
+UPLOAD_FOLDER = '/tmp/input'  # Use /tmp for Vercel
+OUTPUT_FOLDER = '/tmp/output'  # Use /tmp for Vercel
 ALLOWED_EXTENSIONS = {'csv'}
 MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file size
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-os.makedirs('output', exist_ok=True)
+os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -50,7 +51,7 @@ def upload_file():
         
         # Generate report
         profiler = CSVProfiler(file_path)
-        report_path = profiler.generate_report()
+        report_path = profiler.generate_report(output_dir=OUTPUT_FOLDER)
         
         return render_template('index.html', 
                              success=True,
@@ -73,26 +74,9 @@ def download_report(filepath):
     except Exception as e:
         return str(e), 404
 
+# For Vercel, we need to export the app
+app.debug = True
+application = app
+
 if __name__ == "__main__":
-    # Process files in input directory
-    input_dir = 'input'
-    if not os.path.exists(input_dir):
-        os.makedirs(input_dir)
-    
-    # Look for CSV files in input directory and its subdirectories
-    csv_files = []
-    for root, dirs, files in os.walk(input_dir):
-        csv_files.extend([os.path.join(root, f) for f in files if f.endswith('.csv')])
-    
-    if csv_files:
-        # Process the first CSV file
-        csv_file_path = csv_files[0]
-        try:
-            profiler = CSVProfiler(csv_file_path)
-            output_file = profiler.generate_report()
-            print(f"Report generated: {output_file}")
-        except Exception as e:
-            print(f"Error generating report: {str(e)}")
-    
-    # Run Flask app
-    app.run(host='0.0.0.0', port=5000, debug=True) 
+    app.run(host='0.0.0.0', port=5000) 
