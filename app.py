@@ -1,26 +1,18 @@
-import os
-import sys
-from flask import Flask, request, render_template, send_file, jsonify
+from flask import Flask, request, render_template, send_file
 from werkzeug.utils import secure_filename
 from csv_profiler import CSVProfiler
-import pandas as pd
+import os
 
 app = Flask(__name__)
-
-# Configure upload settings
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 ALLOWED_EXTENSIONS = {'csv'}
-MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file size
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 @app.route('/')
 def index():
-    try:
-        return render_template('index.html')
-    except Exception as e:
-        print(f"Error: {str(e)}", file=sys.stderr)
-        return str(e), 500
+    return render_template('index.html')
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
@@ -28,18 +20,13 @@ def upload_file():
         return render_template('index.html', error="No file selected")
     
     file = request.files['file']
-    if file.filename == '':
-        return render_template('index.html', error="No file selected")
-    
-    if not allowed_file(file.filename):
-        return render_template('index.html', error="Invalid file type. Please upload a CSV file")
+    if file.filename == '' or not allowed_file(file.filename):
+        return render_template('index.html', error="Please select a valid CSV file")
     
     try:
-        # Create a temporary file path
+        # Save and process file
         temp_dir = '/tmp'
         os.makedirs(temp_dir, exist_ok=True)
-        
-        # Save uploaded file
         filename = secure_filename(file.filename)
         file_path = os.path.join(temp_dir, filename)
         file.save(file_path)
@@ -47,11 +34,11 @@ def upload_file():
         # Generate report
         profiler = CSVProfiler(file_path)
         if not profiler.read_csv():
-            return render_template('index.html', error="Could not read the CSV file. Please check the file format and encoding.")
+            return render_template('index.html', error="Could not read the CSV file")
             
         report_path = profiler.generate_report(output_dir=temp_dir)
         
-        # Return the report
+        # Return and cleanup
         try:
             return send_file(
                 report_path,
@@ -59,21 +46,16 @@ def upload_file():
                 download_name=f"report_{os.path.splitext(filename)[0]}.pdf"
             )
         finally:
-            # Clean up temporary files
             if os.path.exists(file_path):
                 os.remove(file_path)
             if os.path.exists(report_path):
                 os.remove(report_path)
         
     except Exception as e:
-        error_message = str(e)
-        if "UnicodeDecodeError" in error_message:
-            error_message = "Encoding error. Please save your CSV file as UTF-8 encoded and try again."
-        return render_template('index.html', error=error_message)
+        return render_template('index.html', error=str(e))
 
-# For Vercel, export the app
-app = Flask(__name__)
+# For Vercel
 application = app
 
 if __name__ == "__main__":
-    app.run() 
+    app.run(host='0.0.0.0', port=5000) 
