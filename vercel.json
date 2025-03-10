@@ -3,11 +3,7 @@
     "builds": [
         {
             "src": "app.py",
-            "use": "@vercel/python@3.1.31",
-            "config": {
-                "maxLambdaSize": "15mb",
-                "includeFiles": ["templates/**"]
-            }
+            "use": "@vercel/python"
         }
     ],
     "routes": [

@@ -4,34 +4,21 @@ from werkzeug.utils import secure_filename
 from csv_profiler import CSVProfiler
 import pandas as pd
 
-template_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'templates'))
-app = Flask(__name__, template_folder=template_dir)
+app = Flask(__name__)
 
 # Configure upload settings
-UPLOAD_FOLDER = '/tmp/input'  # Use /tmp for Vercel
-OUTPUT_FOLDER = '/tmp/output'  # Use /tmp for Vercel
 ALLOWED_EXTENSIONS = {'csv'}
 MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file size
-
-# Only create directories when needed
-def ensure_directories():
-    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-    os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 @app.route('/', methods=['GET'])
 def index():
-    try:
-        return render_template('index.html')
-    except Exception as e:
-        return f"Error loading template: {str(e)}", 500
+    return render_template('index.html')
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
-    ensure_directories()  # Create directories only when uploading
-    
     if 'file' not in request.files:
         return render_template('index.html', error="No file selected")
     
@@ -43,50 +30,44 @@ def upload_file():
         return render_template('index.html', error="Invalid file type. Please upload a CSV file")
     
     try:
-        # Secure the filename and clean it
+        # Create a temporary file path
+        temp_dir = '/tmp'
+        os.makedirs(temp_dir, exist_ok=True)
+        
+        # Save uploaded file
         filename = secure_filename(file.filename)
-        base_filename = os.path.splitext(filename)[0]
-        clean_filename = "".join(c if c.isalnum() else "_" for c in base_filename).strip("_")
-        
-        # Create project-specific directory in input
-        project_input_dir = os.path.join(UPLOAD_FOLDER, clean_filename)
-        os.makedirs(project_input_dir, exist_ok=True)
-        
-        # Save file in project directory
-        file_path = os.path.join(project_input_dir, filename)
+        file_path = os.path.join(temp_dir, filename)
         file.save(file_path)
         
         # Generate report
         profiler = CSVProfiler(file_path)
-        if not profiler.read_csv():  # First try to read the CSV
+        if not profiler.read_csv():
             return render_template('index.html', error="Could not read the CSV file. Please check the file format and encoding.")
             
-        report_path = profiler.generate_report(output_dir=OUTPUT_FOLDER)
+        report_path = profiler.generate_report(output_dir=temp_dir)
         
-        return render_template('index.html', 
-                             success=True,
-                             message="Report generated successfully!",
-                             report_filepath=report_path)
+        # Return the report
+        try:
+            return send_file(
+                report_path,
+                as_attachment=True,
+                download_name=f"report_{os.path.splitext(filename)[0]}.pdf"
+            )
+        finally:
+            # Clean up temporary files
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            if os.path.exists(report_path):
+                os.remove(report_path)
         
     except Exception as e:
         error_message = str(e)
         if "UnicodeDecodeError" in error_message:
             error_message = "Encoding error. Please save your CSV file as UTF-8 encoded and try again."
-        
         return render_template('index.html', error=error_message)
 
-@app.route('/download/<path:filepath>')
-def download_report(filepath):
-    try:
-        directory = os.path.dirname(filepath)
-        filename = os.path.basename(filepath)
-        return send_file(filepath, as_attachment=True, download_name=filename)
-    except Exception as e:
-        return str(e), 404
-
-# For Vercel, we need to export the app
-app.debug = True
+# For Vercel, export the app
 application = app
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=5000) 
+    app.run(debug=True) 
