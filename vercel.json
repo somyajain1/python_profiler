@@ -3,13 +3,27 @@
     "builds": [
         {
             "src": "app.py",
-            "use": "@vercel/python"
+            "use": "@vercel/python@3.1.31",
+            "config": {
+                "maxLambdaSize": "15mb"
+            }
+        },
+        {
+            "src": "templates/**",
+            "use": "@vercel/static"
         }
     ],
     "routes": [
         {
+            "src": "/templates/(.*)",
+            "dest": "/templates/$1"
+        },
+        {
+            "handle": "filesystem"
+        },
+        {
             "src": "/(.*)",
-            "dest": "app.py"
+            "dest": "/app.py"
         }
     ]
 } 

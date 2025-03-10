@@ -1,10 +1,15 @@
 import os
+import sys
 from flask import Flask, request, render_template, send_file, jsonify
 from werkzeug.utils import secure_filename
 from csv_profiler import CSVProfiler
 import pandas as pd
 
-app = Flask(__name__)
+# Initialize Flask app with explicit template folder
+template_dir = os.path.abspath('templates')
+app = Flask(__name__, 
+           template_folder=template_dir,
+           static_folder=None)  # Disable static folder handling
 
 # Configure upload settings
 ALLOWED_EXTENSIONS = {'csv'}
@@ -15,7 +20,13 @@ def allowed_file(filename):
 
 @app.route('/', methods=['GET'])
 def index():
-    return render_template('index.html')
+    try:
+        print(f"Template directory: {template_dir}", file=sys.stderr)
+        print(f"Templates available: {os.listdir(template_dir)}", file=sys.stderr)
+        return render_template('index.html')
+    except Exception as e:
+        print(f"Error rendering template: {str(e)}", file=sys.stderr)
+        return f"Error: {str(e)}", 500
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
