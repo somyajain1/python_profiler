@@ -4,7 +4,8 @@ from werkzeug.utils import secure_filename
 from csv_profiler import CSVProfiler
 import pandas as pd
 
-app = Flask(__name__)
+template_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'templates'))
+app = Flask(__name__, template_folder=template_dir)
 
 # Configure upload settings
 UPLOAD_FOLDER = '/tmp/input'  # Use /tmp for Vercel
