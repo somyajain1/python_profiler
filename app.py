@@ -13,9 +13,10 @@ OUTPUT_FOLDER = '/tmp/output'  # Use /tmp for Vercel
 ALLOWED_EXTENSIONS = {'csv'}
 MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file size
 
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+# Only create directories when needed
+def ensure_directories():
+    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+    os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -29,6 +30,8 @@ def index():
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
+    ensure_directories()  # Create directories only when uploading
+    
     if 'file' not in request.files:
         return render_template('index.html', error="No file selected")
     
@@ -46,7 +49,7 @@ def upload_file():
         clean_filename = "".join(c if c.isalnum() else "_" for c in base_filename).strip("_")
         
         # Create project-specific directory in input
-        project_input_dir = os.path.join(app.config['UPLOAD_FOLDER'], clean_filename)
+        project_input_dir = os.path.join(UPLOAD_FOLDER, clean_filename)
         os.makedirs(project_input_dir, exist_ok=True)
         
         # Save file in project directory
@@ -55,6 +58,9 @@ def upload_file():
         
         # Generate report
         profiler = CSVProfiler(file_path)
+        if not profiler.read_csv():  # First try to read the CSV
+            return render_template('index.html', error="Could not read the CSV file. Please check the file format and encoding.")
+            
         report_path = profiler.generate_report(output_dir=OUTPUT_FOLDER)
         
         return render_template('index.html', 
