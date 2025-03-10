@@ -5,11 +5,7 @@ from werkzeug.utils import secure_filename
 from csv_profiler import CSVProfiler
 import pandas as pd
 
-# Initialize Flask app with explicit template folder
-template_dir = os.path.abspath('templates')
-app = Flask(__name__, 
-           template_folder=template_dir,
-           static_folder=None)  # Disable static folder handling
+app = Flask(__name__)
 
 # Configure upload settings
 ALLOWED_EXTENSIONS = {'csv'}
@@ -18,15 +14,13 @@ MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file size
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-@app.route('/', methods=['GET'])
+@app.route('/')
 def index():
     try:
-        print(f"Template directory: {template_dir}", file=sys.stderr)
-        print(f"Templates available: {os.listdir(template_dir)}", file=sys.stderr)
         return render_template('index.html')
     except Exception as e:
-        print(f"Error rendering template: {str(e)}", file=sys.stderr)
-        return f"Error: {str(e)}", 500
+        print(f"Error: {str(e)}", file=sys.stderr)
+        return str(e), 500
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
@@ -78,7 +72,8 @@ def upload_file():
         return render_template('index.html', error=error_message)
 
 # For Vercel, export the app
+app = Flask(__name__)
 application = app
 
 if __name__ == "__main__":
-    app.run(debug=True) 
+    app.run() 
